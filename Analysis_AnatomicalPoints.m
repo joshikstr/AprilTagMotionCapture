@@ -47,6 +47,7 @@ clc
 addpath('Data')
 addpath('Classes')
 addpath('Functions')
+addpath('Data\VICON\')
 
 disp('load anatomical points')
 load(uigetfile('Data\*mat'))
@@ -56,13 +57,20 @@ end
 T_StartVideoCam = TStart;
 
 clc
-disp('load Synchronizaztion of Stereo Camera System')
+disp('load Synchronizaztion of VICON and Stereo Camera System')
 load(uigetfile('Data\*mat'))
 if ~exist("T_Offset",'var')
     error('wrong data')
 end
 
 clc
+disp('open VICON data...')
+fileVICON =uigetfile('Data\VICON\*.csv');
+VICON_Data = readmatrix(fileVICON);
+fps_VICON = 300;      % Hz
+fps_Cams = 20;        % Hz
+factor = fps_VICON/fps_Cams;
+
 abfrage_deltaT = 'give delta T in s (e.g. 30): ';
 delta_T = input(abfrage_deltaT);
 deltaFrameCam = round(delta_T*fps_Cams);
@@ -91,11 +99,39 @@ for object = 1:4
     trajectories.(field) = vecObject;
 end
 
+%% Sorting VICON Data
+T_Offset = T_Offset - 1/fps_Cams;   % conisder filter delay --> avg Pose over 3 frames
+FrameViconStart = round((T_StartVideoCam+T_Offset)*fps_VICON) + 3; % first cells Infos
+FrameViconEnd = FrameViconStart + deltaFrameVICON-1;
 
+for object = 1:4
+     if object == 1
+        abfrage = 'give position of Unterschenkel R in VICON (e.g. "5"): ';
+        pos = input(abfrage);
+    elseif object == 2
+        abfrage = 'give position of Unterschenkel L in VICON (e.g. "4"): ';
+        pos = input(abfrage);
+    elseif object == 3
+        abfrage = 'give position of Oberschenkel L in VICON (e.g. "2"): ';
+        pos = input(abfrage);
+    else
+        abfrage = 'give position of Oberschenkel R in VICON (e.g. "3"): ';
+        pos = input(abfrage);
+    end
+    index = 3+(pos-1)*7;   % Important: 7 if Quat angles, 6 if Helix angles
+    field = strcat('objectVICON_',num2str(object));
+    trajectory = VICON_Data(FrameViconStart:FrameViconEnd,index+4:index+6);
+%     logical = isnan(trajectory);
+%     if any(logical)
+%         trajectory(logical) = 0;
+%     end
+    trajectories.(field) = trajectory' ./ 1000;
+end
 
 %% XYZ plot
 
 TCam = 1/fps_Cams;      % s
+TVICON = 1/fps_VICON;   % s
 
 TimeVecCam = [TCam:TCam:delta_T];
 TimeVecVICON = [TVICON:TVICON:delta_T];
